@@ -16,13 +16,6 @@ def mouse_fn(btn, row, col):
     current = WHITE if current == BLACK else BLACK
     b.title = f"Othello! Turn: {'Black ⚫' if current == BLACK else 'White ⚪'}"
 
-def change_color():
-
-
-def legal_moves():
-
-
-
 
 b = Board(8,8)         
 b[3][3] = WHITE
