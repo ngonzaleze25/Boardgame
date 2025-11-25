@@ -1,0 +1,245 @@
+from game2dboard import Board
+
+EMPTY = None
+BLACK = "⚫"
+WHITE = "⚪"
+current = BLACK
+HINT = "x"
+total = 64
+
+# Phase 3: stack for history
+history = []  # each entry: (row, col, player, flipped_list)
+
+# Win statistics (across games, if you choose to reset the board later)
+white_wins = 0
+black_wins = 0
+
+DIRECTIONS = [
+    (-1, -1), (-1, 0), (-1, 1),
+    ( 0, -1),          ( 0, 1),
+    ( 1, -1), ( 1, 0), ( 1, 1),
+]
+
+
+def possible_moves(player):
+    if player == BLACK:
+        opponent = WHITE
+    else:
+        opponent = BLACK
+    possible = []
+
+    for row in range(8):
+        for col in range(8):
+            if b[row][col] is not None:
+                continue
+
+            has_adjacent_opponent = False
+            for dr, dc in DIRECTIONS:
+                new_row, new_col = row + dr, col + dc
+                if 0 <= new_row < 8 and 0 <= new_col < 8:
+                    if b[new_row][new_col] != opponent:
+                        continue
+
+                    r, c = new_row + dr, new_col + dc
+                    while 0 <= r < 8 and 0 <= c < 8 and b[r][c] == opponent:
+                        r += dr
+                        c += dc
+
+                    if 0 <= r < 8 and 0 <= c < 8 and b[r][c] == player:
+                        has_adjacent_opponent = True
+                        break
+
+            if has_adjacent_opponent:
+                possible.append((row, col))
+
+    return possible
+
+
+def show_hints():
+    clear_hints()
+    moves = possible_moves(current)
+    for row, col in moves:
+        b[row][col] = HINT
+
+
+def clear_hints():
+    for row in range(8):
+        for col in range(8):
+            if b[row][col] == HINT:
+                b[row][col] = EMPTY
+
+
+def flip_color(b, row, col, current):
+    opponent = WHITE if current == BLACK else BLACK
+    to_flip = []
+    for dr, dc in DIRECTIONS:
+        r, c = row + dr, col + dc
+        line = []
+        if not (0 <= r < 8 and 0 <= c < 8) or b[r][c] != opponent:
+            continue
+        while 0 <= r < 8 and 0 <= c < 8 and b[r][c] == opponent:
+            line.append((r, c))
+            r += dr
+            c += dc
+
+        if line and 0 <= r < 8 and 0 <= c < 8 and b[r][c] == current:
+            to_flip.extend(line)
+
+    for r, c in to_flip:
+        b[r][c] = current
+    return to_flip
+
+
+# ---------- POINT COUNTER + WIN LOGIC ----------
+
+def pointcounter():
+    """Counts and prints points for both players. Returns (white, black)."""
+    white = 0
+    black = 0
+    for i in range(8):
+        for j in range(8):
+            if b[i][j] == WHITE:
+                white += 1
+            elif b[i][j] == BLACK:
+                black += 1
+
+    # Print so players can see it in the console
+    print("White:", white)
+    print("Black:", black)
+
+    return white, black
+
+
+def update_title():
+    """Update the window title with current turn and current score."""
+    white, black = pointcounter()
+    turn_text = 'Black ⚫' if current == BLACK else 'White ⚪'
+    b.title = f"Othello! Turn: {turn_text} | ⚪ {white} - ⚫ {black}"
+
+
+def board_full():
+    """Returns True if there are no EMPTY cells left."""
+    for row in range(8):
+        for col in range(8):
+            if b[row][col] == EMPTY or b[row][col] == HINT:
+                return False
+    return True
+
+
+def check_game_over():
+    """
+    Check if game is over:
+    - no possible moves for both players OR
+    - board is full.
+    If over, decide winner and show result.
+    """
+    global white_wins, black_wins
+
+    if possible_moves(BLACK) or possible_moves(WHITE):
+        # at least one player still has a move
+        return
+
+    if not board_full():
+        # technically both may have no moves even if not completely full,
+        # but the above condition already covers "no moves" for both colors,
+        # so this check is just defensive.
+        pass
+
+    white, black = pointcounter()
+
+    if white > black:
+        white_wins += 1
+        result_msg = "White wins!"
+    elif black > white:
+        black_wins += 1
+        result_msg = "Black wins!"
+    else:
+        result_msg = "It's a tie!"
+
+    b.title = (
+        f"Game over! {result_msg} "
+        f"Final score: ⚪ {white} - ⚫ {black} | "
+        f"Match wins: ⚪ {white_wins} - ⚫ {black_wins}"
+    )
+
+
+# ---------- MOUSE / KEY HANDLERS ----------
+
+def mouse_fn(btn, row, col):
+    global current, total, history
+
+    if b[row][col] != HINT:
+        if b[row][col] is not None:
+            b.title = "That tile is already taken!"
+        else:
+            b.title = "Invalid move! Click on one of the possible moves (x)."
+        return
+
+    clear_hints()
+
+    b[row][col] = current
+
+    flipped = flip_color(b, row, col, current)
+    if not flipped:
+        b[row][col] = EMPTY
+        show_hints()
+        update_title()
+        return
+
+    # Phase 3: push move on history stack
+    history.append((row, col, current, flipped))
+
+    # Switch player
+    if current == BLACK:
+        current = WHITE
+    else:
+        current = BLACK
+
+    show_hints()
+    update_title()
+    check_game_over()
+
+
+def undo():
+    global current, history
+    if not history:
+        b.title = "No moves to undo."
+        return
+
+    row, col, player, flipped = history.pop()
+
+    clear_hints()
+
+    b[row][col] = EMPTY
+    opponent = WHITE if player == BLACK else BLACK
+    for r, c in flipped:
+        b[r][c] = opponent
+
+    current = player
+
+    show_hints()
+    update_title()
+
+
+def key_fn(key):
+    if key == "u":
+        undo()
+
+
+# ---------- PROGRAM EXECUTION STARTS HERE ----------
+
+b = Board(8, 8)
+b[3][3] = WHITE
+b[4][3] = BLACK
+b[3][4] = BLACK
+b[4][4] = WHITE
+
+b.cell_size = 80
+b.cell_color = "green"
+b.on_mouse_click = mouse_fn
+b.on_key_press = key_fn   # press "u" to undo
+
+show_hints()
+update_title()
+
+b.show()  # waits for user input, once you click it runs mouse_fn
